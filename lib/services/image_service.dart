@@ -19,6 +19,16 @@ class ImageService {
     return savedFile.path;
   }
 
+  Future<String> fixImagePath(String path) async {
+    if (await File(path).exists()) return path;
+
+    final docsDir = await getApplicationDocumentsDirectory();
+    final newPath = join(docsDir.path, 'images', basename(path));
+    if (await File(newPath).exists()) return newPath;
+
+    return path;
+  }
+
   Future<void> deleteImage(String? path) async {
     if (path == null) return;
     try {

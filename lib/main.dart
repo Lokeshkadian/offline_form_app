@@ -2,14 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/record_provider.dart';
+import 'providers/sync_provider.dart';
 import 'screens/home_screen.dart';
+import 'services/server_config.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await ServerConfig.load();
+
+  final recordProvider = RecordProvider();
+  await recordProvider.loadRecords();
+
+  final syncProvider = SyncProvider(recordProvider: recordProvider)
+    ..startMonitoring();
+
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => RecordProvider()..loadRecords(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: recordProvider),
+        ChangeNotifierProvider.value(value: syncProvider),
+      ],
       child: const MyApp(),
     ),
   );

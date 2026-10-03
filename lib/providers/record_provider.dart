@@ -23,10 +23,25 @@ class RecordProvider extends ChangeNotifier {
     notifyListeners();
 
     await _db.resetStuckSyncing();
+    await _fixImagePaths();
     _records = await _db.getAllRecords();
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> _fixImagePaths() async {
+    final all = await _db.getAllRecords();
+    for (final record in all) {
+      final oldPath = record.imagePath;
+      if (oldPath == null) continue;
+
+      final newPath = await _imageService.fixImagePath(oldPath);
+      if (newPath != oldPath) {
+        record.imagePath = newPath;
+        await _db.updateRecord(record);
+      }
+    }
   }
 
   Future<void> refresh() async {
@@ -71,6 +86,11 @@ class RecordProvider extends ChangeNotifier {
   Future<void> deleteRecord(FormRecord record) async {
     _records.removeWhere((r) => r.localId == record.localId);
     notifyListeners();
+
+    final serverId = record.serverId;
+    if (serverId != null) {
+      await _db.addDeletedServerId(serverId);
+    }
 
     await _db.deleteRecord(record.localId);
     await _imageService.deleteImage(record.imagePath);

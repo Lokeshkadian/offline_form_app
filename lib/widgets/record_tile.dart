@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/form_record.dart' show FormRecord, SyncStatus;
+import '../services/server_config.dart';
 
 class RecordTile extends StatelessWidget {
   final FormRecord record;
@@ -59,7 +60,7 @@ class RecordTile extends StatelessWidget {
     }
     if (record.imageUrl != null) {
       return Image.network(
-        record.imageUrl!,
+        ServerConfig.fullImageUrl(record.imageUrl!),
         width: 56,
         height: 56,
         fit: BoxFit.cover,

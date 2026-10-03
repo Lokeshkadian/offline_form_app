@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/form_record.dart';
+import '../services/server_config.dart';
 import '../utils/validators.dart';
 
 class FormScreen extends StatefulWidget {
@@ -315,7 +316,7 @@ class _FormScreenState extends State<FormScreen> {
                     child: _imagePath != null
                         ? Image.file(File(_imagePath!), fit: BoxFit.cover)
                         : Image.network(
-                            widget.record!.imageUrl!,
+                            ServerConfig.fullImageUrl(widget.record!.imageUrl!),
                             fit: BoxFit.cover,
                           ),
                   ),

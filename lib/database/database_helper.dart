@@ -13,6 +13,8 @@ class DatabaseHelper {
 
   static const String table = 'records';
 
+  static const String deletedTable = 'deleted_records';
+
   Database? _db;
 
   Future<Database> get database async {
@@ -27,7 +29,11 @@ class DatabaseHelper {
 
     return factory.openDatabase(
       path,
-      options: OpenDatabaseOptions(version: 1, onCreate: _onCreate),
+      options: OpenDatabaseOptions(
+        version: 2,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      ),
     );
   }
 
@@ -51,6 +57,17 @@ class DatabaseHelper {
         updated_at TEXT NOT NULL
       )
     ''');
+    await _createDeletedTable(db);
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createDeletedTable(db);
+    }
+  }
+
+  Future<void> _createDeletedTable(Database db) async {
+    await db.execute('CREATE TABLE $deletedTable (server_id TEXT PRIMARY KEY)');
   }
 
   Future<void> insertRecord(FormRecord record) async {
@@ -130,6 +147,26 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> saveServerId(String localId, String serverId) async {
+    final db = await database;
+    await db.update(
+      table,
+      {'server_id': serverId},
+      where: 'local_id = ?',
+      whereArgs: [localId],
+    );
+  }
+
+  Future<void> markImageUploaded(String localId, String? imageUrl) async {
+    final db = await database;
+    await db.update(
+      table,
+      {'image_url': imageUrl, 'image_uploaded': 1},
+      where: 'local_id = ?',
+      whereArgs: [localId],
+    );
+  }
+
   Future<void> markAsSynced(String localId, String serverId) async {
     final db = await database;
     await db.update(
@@ -151,6 +188,28 @@ class DatabaseHelper {
       {'sync_status': SyncStatus.failed.name, 'sync_error': error},
       where: 'local_id = ?',
       whereArgs: [localId],
+    );
+  }
+
+  Future<void> addDeletedServerId(String serverId) async {
+    final db = await database;
+    await db.insert(deletedTable, {
+      'server_id': serverId,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<List<String>> getDeletedServerIds() async {
+    final db = await database;
+    final rows = await db.query(deletedTable);
+    return rows.map((row) => row['server_id'] as String).toList();
+  }
+
+  Future<void> removeDeletedServerId(String serverId) async {
+    final db = await database;
+    await db.delete(
+      deletedTable,
+      where: 'server_id = ?',
+      whereArgs: [serverId],
     );
   }
 

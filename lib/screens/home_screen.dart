@@ -3,8 +3,13 @@ import 'package:provider/provider.dart';
 
 import '../models/form_record.dart';
 import '../providers/record_provider.dart';
+import '../providers/sync_provider.dart';
+import '../services/sync_service.dart';
+import '../widgets/offline_banner.dart';
 import '../widgets/record_tile.dart';
+import '../widgets/sync_progress_bar.dart';
 import 'form_screen.dart';
+import 'server_settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +20,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openForm({FormRecord? existing}) async {
+    if (existing != null && _blockedBySync()) return;
+
     final provider = context.read<RecordProvider>();
 
     final record = await Navigator.push<FormRecord>(
@@ -68,9 +75,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _onLongPress(FormRecord record) async {
+    if (_blockedBySync()) return;
     if (await _confirmDelete(record)) {
       await _deleteRecord(record);
     }
+  }
+
+  Future<void> _openServerSettings() async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const ServerSettingsScreen()),
+    );
+    if (saved == true) _showMessage('Server address saved');
   }
 
   void _showMessage(String text) {
@@ -78,17 +94,59 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  void _comingSoon(String feature) {
-    _showMessage('$feature will be added in a later step');
+  bool _blockedBySync() {
+    if (context.read<SyncProvider>().isBusy) {
+      _showMessage('Please wait until the sync finishes');
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _syncPending() async {
+    final result = await context.read<SyncProvider>().syncPending();
+    _showSyncResult(result);
+  }
+
+  Future<void> _retryFailed() async {
+    final result = await context.read<SyncProvider>().retryFailed();
+    _showSyncResult(result);
+  }
+
+  Future<void> _refreshFromServer() async {
+    final result = await context.read<SyncProvider>().refreshFromServer();
+    _showSyncResult(result);
+  }
+
+  void _showSyncResult(SyncResult? result) {
+    if (result == null) return;
+
+    final parts = <String>[];
+    if (result.syncedCount > 0 || result.failedCount > 0) {
+      parts.add('${result.syncedCount} synced, ${result.failedCount} failed');
+    }
+    if (result.newFromServer > 0) {
+      parts.add('${result.newFromServer} new from server');
+    }
+    if (result.errorMessage != null) {
+      parts.add(result.errorMessage!);
+    }
+
+    _showMessage(
+      parts.isEmpty ? 'Everything is up to date' : parts.join(' · '),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<RecordProvider>();
+    final sync = context.watch<SyncProvider>();
     final records = provider.records;
 
     final pendingCount = records
         .where((r) => r.syncStatus == SyncStatus.pending)
+        .length;
+    final failedCount = records
+        .where((r) => r.syncStatus == SyncStatus.failed)
         .length;
 
     Widget body;
@@ -98,6 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body = _buildEmptyState();
     } else {
       body = ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 80),
         itemCount: records.length,
         itemBuilder: (context, index) => _buildRow(records[index]),
@@ -105,11 +164,30 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Records')),
+      appBar: AppBar(
+        title: const Text('My Records'),
+        actions: [
+          IconButton(
+            tooltip: 'Server settings',
+            icon: const Icon(Icons.settings),
+            onPressed: _openServerSettings,
+          ),
+        ],
+      ),
       body: Column(
         children: [
-          _buildSyncBar(pendingCount),
-          Expanded(child: body),
+          if (!sync.isOnline) const OfflineBanner(),
+          _buildSyncBar(sync, pendingCount, failedCount),
+          if (sync.isSyncing)
+            SyncProgressBar(
+              completed: sync.completed,
+              total: sync.total,
+              percentage: sync.percentage,
+              currentRecordName: sync.currentRecordName,
+            ),
+          Expanded(
+            child: RefreshIndicator(onRefresh: _refreshFromServer, child: body),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -124,7 +202,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Dismissible(
       key: ValueKey(record.localId),
       direction: DismissDirection.endToStart,
-      confirmDismiss: (_) => _confirmDelete(record),
+      confirmDismiss: (_) async {
+        if (_blockedBySync()) return false;
+        return _confirmDelete(record);
+      },
       onDismissed: (_) => _deleteRecord(record),
       background: Container(
         alignment: Alignment.centerRight,
@@ -142,20 +223,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSyncBar(int pendingCount) {
+  Widget _buildSyncBar(SyncProvider sync, int pendingCount, int failedCount) {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          Expanded(child: Text('Pending: $pendingCount')),
+          Expanded(child: Text('Pending: $pendingCount\nFailed: $failedCount')),
           OutlinedButton.icon(
-            onPressed: () => _comingSoon('Retry'),
+            onPressed: sync.isBusy || failedCount == 0 ? null : _retryFailed,
             icon: const Icon(Icons.refresh),
             label: const Text('Retry Failed'),
           ),
           const SizedBox(width: 8),
           FilledButton.icon(
-            onPressed: () => _comingSoon('Sync'),
+            onPressed: sync.isBusy ? null : _syncPending,
             icon: const Icon(Icons.sync),
             label: const Text('Sync'),
           ),
@@ -165,15 +246,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.inbox, size: 64, color: Colors.grey),
-          SizedBox(height: 12),
-          Text('No records yet. Tap "New Record" to add one.'),
-        ],
-      ),
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: const [
+        SizedBox(height: 120),
+        Icon(Icons.inbox, size: 64, color: Colors.grey),
+        SizedBox(height: 12),
+        Center(child: Text('No records yet. Tap "New Record" to add one.')),
+        SizedBox(height: 4),
+        Center(
+          child: Text(
+            'Pull down to load records from the server.',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      ],
     );
   }
 }

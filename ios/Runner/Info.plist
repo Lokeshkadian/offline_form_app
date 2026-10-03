@@ -30,6 +30,8 @@
 	<string>The camera is used to take a photo for a form record.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>The photo library is used to choose a photo for a form record.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>The app connects to the mock server on your local Wi-Fi to sync form records.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

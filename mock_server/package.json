@@ -1,0 +1,15 @@
+{
+  "name": "offline-form-mock-server",
+  "version": "1.0.0",
+  "description": "Mock REST API for the offline form app",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "reset": "node -e \"require('fs').writeFileSync('db.json', JSON.stringify({ records: [] }, null, 2) + '\\n')\""
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "multer": "^2.0.2"
+  }
+}

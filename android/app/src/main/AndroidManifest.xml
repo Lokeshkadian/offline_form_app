@@ -1,8 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Needed to talk to the mock server. Debug builds add this automatically,
+         but the release APK will have no network access without it. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="offline_form_app"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

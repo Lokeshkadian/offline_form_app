@@ -30,6 +30,19 @@ class Validators {
     return null;
   }
 
+  static String? serverUrl(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter the server address';
+    }
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
+      return 'Use a full address like http://192.168.1.5:3000';
+    }
+    return null;
+  }
+
   static String? requiredField(String? value, String fieldName) {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter $fieldName';
